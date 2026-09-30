@@ -247,76 +247,68 @@ docker run --rm -i --env-file .env promua-mcp
 - direct Prom search fails closed if the expected JSON-LD structure disappears;
 - DuckDuckGo challenges are detected, not bypassed.
 
-## Publishing to npm
+## Branching and releases
 
-Publishing is automated by GitHub Actions in `.github/workflows/publish-npm.yml`.
+Development happens on **`devel`**. The **`main`** branch is release-only.
 
-### One-time repository setup
+Normal flow:
 
-Create an npm **Granular Access Token** with package write access suitable for non-interactive publishing, then add it to this GitHub repository as an Actions secret named exactly:
+1. work on `devel` (or a short-lived branch targeting `devel`);
+2. keep CI green;
+3. open a pull request from `devel` to `main`;
+4. merge the PR;
+5. the successful `main` merge automatically creates a GitHub Release and publishes npm.
+
+Direct pushes to `main` are rejected by the repository policy workflow after bootstrap. Server-side GitHub branch protection should also require PRs and the CI/Main Branch Policy checks.
+
+### Automatic versioning
+
+Every successful merge into `main` releases a version.
+
+- If the repository version is already published, the workflow increments the **patch** version automatically.
+- To intentionally release a new minor or major line, raise the version in `devel` first (for example `0.4.0` or `1.0.0`). If it is higher than the current npm version, that explicit version wins.
+- The release workflow creates a release-only commit under the version tag, so it does **not** need to push a version-bump commit back into protected `main`.
+
+The first automatic release uses the current repository version when the package is not yet published.
+
+### npm authentication
+
+Create an npm **Granular Access Token** with package publish permissions and add it to this GitHub repository as an Actions secret named exactly:
 
 ```text
 NPM
 ```
 
-The workflow passes it only as:
+The workflow uses it only as:
 
 ```text
 NODE_AUTH_TOKEN=${{ secrets.NPM }}
 ```
 
-The token is never committed to this repository.
+Before publishing, it runs `npm whoami` and fails clearly if the secret is missing, expired or invalid.
 
-> npm currently requires 2FA for publishing, or a granular token configured to bypass 2FA for non-interactive direct publishing. npm recommends Trusted Publishing for long-term CI/CD; this repository intentionally uses the requested `NPM` GitHub secret for now.
+### Release validation
 
-### Release flow
+Before a release is published, GitHub Actions validates:
 
-1. Bump `package.json` and `package-lock.json` together, for example:
-
-```bash
-npm version patch --no-git-tag-version
-```
-
-2. Validate locally:
-
-```bash
-npm ci
-npm run check
-npm test
-npm run build
-npm run test:runtime
-npm run verify:package
-```
-
-3. Commit the version change and wait for CI to pass on Node 20, 22 and 24.
-4. Create/push a tag that exactly matches the package version, e.g. `v0.3.2`.
-5. Create a **GitHub Release** from that tag and publish the release.
-
-Publishing the GitHub Release triggers the npm workflow. Before `npm publish`, it verifies:
-
-- the release tag exactly matches `package.json` version;
-- the tagged commit belongs to `main` history;
+- the `main` update came from a merged PR (except the one-time bootstrap release);
+- the package name, existing npm metadata and repository URL match this project;
 - locked dependencies install with `npm ci`;
-- typecheck, unit tests and build pass;
-- the built MCP server completes a real stdio handshake and exposes tools;
+- typecheck and unit tests pass;
+- the project builds;
+- the built MCP server completes a real stdio handshake and exposes its tools;
 - the npm tarball contains the expected files and no source/tests/workflows;
-- the exact package version is not already present on npm.
+- the version has not already been published.
 
-The final command is:
+The final publish command is:
 
 ```bash
 npm publish --access public --provenance
 ```
 
-### Package validation
+The same workflow creates the matching Git tag and GitHub Release.
 
-```bash
-npm run verify:package
-```
-
-runs `npm pack --json --dry-run` and verifies the actual npm package contents, including the CLI shebang and `dist/index.js`.
-
-## Development
+## Development## Development
 
 ```bash
 npm ci
