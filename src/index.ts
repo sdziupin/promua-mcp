@@ -12,7 +12,7 @@ const config = loadConfig();
 const server = new Server(
   {
     name: "promua-mcp",
-    version: "0.1.0",
+    version: "0.3.1",
   },
   {
     capabilities: {
