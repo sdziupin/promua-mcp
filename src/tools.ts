@@ -1,3 +1,5 @@
+import { buyerTools } from "./buyer/tools.js";
+
 const idSchema = {
   anyOf: [
     { type: "string", minLength: 1 },
@@ -10,7 +12,7 @@ const paginationProperties = {
   last_id: { type: "integer", minimum: 0, description: "Prom.ua cursor/id for pagination where supported." },
 } as const;
 
-export const tools = [
+const sellerAndSearchTools = [
   {
     name: "prom_search_products",
     description: "Search the public Prom.ua marketplace through Brave Search or SearXNG. Does not scrape Prom.ua pages directly.",
@@ -211,3 +213,5 @@ export const tools = [
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
 ];
+
+export const tools = [...buyerTools, ...sellerAndSearchTools];
