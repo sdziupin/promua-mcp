@@ -8,6 +8,12 @@ const config: Config = {
   promApiBaseUrl: "https://my.prom.ua/api/v1",
   allowWrites: false,
   httpTimeoutMs: 1000,
+  buyerProfileDir: "/tmp/promua-mcp-test-profile",
+  buyerSavedSearchesFile: "/tmp/promua-mcp-test-searches.json",
+  buyerHeadless: true,
+  buyerAllowMutations: false,
+  buyerActionTimeoutMs: 1000,
+  buyerPageDelayMs: 1,
 };
 
 test("write operations are blocked by default before any HTTP request", async () => {
