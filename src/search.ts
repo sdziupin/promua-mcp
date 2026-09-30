@@ -216,6 +216,14 @@ export async function searchPromProducts(
     ? { query: queryOrSpec, limit: legacyLimit }
     : queryOrSpec;
 
+  if (
+    spec.min_price !== undefined &&
+    spec.max_price !== undefined &&
+    spec.min_price > spec.max_price
+  ) {
+    throw new Error("min_price must be less than or equal to max_price");
+  }
+
   const source = spec.source ?? "auto";
   if (source === "external") {
     return searchPromProductsExternal(config, spec);
