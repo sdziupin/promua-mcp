@@ -301,14 +301,15 @@ async function fetchPromPage(
   });
 
   const offers = parsePromProducts(html);
-  if (!offers.length) {
+  const total = parsePromTotal(html);
+  if (!offers.length && total !== 0) {
     throw new Error(`Prom search page ${page} has no Product JSON-LD blocks`);
   }
 
   return {
     html,
     offers,
-    total: parsePromTotal(html),
+    total,
   };
 }
 
@@ -319,6 +320,13 @@ export async function searchPromMarketplace(
 ): Promise<PromMarketplaceSearchResult> {
   const query = spec.query.trim();
   if (!query) throw new Error("query must not be empty");
+  if (
+    spec.min_price !== undefined &&
+    spec.max_price !== undefined &&
+    spec.min_price > spec.max_price
+  ) {
+    throw new Error("min_price must be less than or equal to max_price");
+  }
 
   const limit = clampInteger(spec.limit, 20, 1, 50);
   const offset = clampInteger(spec.offset, 0, 0, 10_000);
