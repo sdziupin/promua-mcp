@@ -1,0 +1,40 @@
+name: Main Branch Policy
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  origin:
+    name: Require merged PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify main update came from a merged PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Before the first release, allow repository bootstrap commits.
+          RELEASE_COUNT="$(gh api "/repos/${GITHUB_REPOSITORY}/releases?per_page=1" --jq 'length')"
+          if [[ "$RELEASE_COUNT" == "0" ]]; then
+            echo "Bootstrap phase: no GitHub release exists yet."
+            exit 0
+          fi
+
+          PR_COUNT="$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+            --jq '[.[] | select(.merged_at != null and .base.ref == "main")] | length')"
+
+          if [[ "$PR_COUNT" == "0" ]]; then
+            echo "::error::Direct pushes to main are not allowed. Merge devel through a pull request."
+            exit 1
+          fi
+
+          echo "main update is associated with a merged pull request."
