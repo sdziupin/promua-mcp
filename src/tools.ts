@@ -13,15 +13,18 @@ const paginationProperties = {
 export const tools = [
   {
     name: "prom_search_products",
-    description: "Search Prom.ua through Brave Search or SearXNG. Browser-free and best-effort, not an exhaustive Prom.ua catalog query.",
+    description: "Search Prom.ua directly via its public SSR search page and Product JSON-LD. Falls back to Brave/SearXNG only if configured and direct Prom parsing fails.",
     inputSchema: {
       type: "object",
       properties: {
-        query: { type: "string", minLength: 1, description: "Product search query, in Ukrainian or any other language." },
-        limit: { type: "integer", minimum: 1, maximum: 20, default: 10 },
-        min_price: { type: "number", minimum: 0, description: "Filter only results whose search snippet exposes a price at or above this value." },
-        max_price: { type: "number", minimum: 0, description: "Filter only results whose search snippet exposes a price at or below this value." },
+        query: { type: "string", minLength: 1, description: "Product search query." },
+        limit: { type: "integer", minimum: 1, maximum: 50, default: 20 },
+        offset: { type: "integer", minimum: 0, maximum: 10000, default: 0 },
+        min_price: { type: "number", minimum: 0, description: "Minimum product price in UAH; applied client-side to Prom JSON-LD prices." },
+        max_price: { type: "number", minimum: 0, description: "Maximum product price in UAH; applied client-side to Prom JSON-LD prices." },
         sort: { type: "string", enum: ["relevance", "price_asc", "price_desc"], default: "relevance" },
+        max_pages: { type: "integer", minimum: 1, maximum: 10, default: 5, description: "Maximum Prom search pages to scan for client-side filters/sorting." },
+        source: { type: "string", enum: ["auto", "prom", "external"], default: "auto", description: "auto = direct Prom SSR first; prom = require direct Prom; external = force Brave/SearXNG fallback." },
       },
       required: ["query"],
       additionalProperties: false,
@@ -29,12 +32,12 @@ export const tools = [
   },
   {
     name: "prom_saved_search_list",
-    description: "List locally saved browser-free Prom.ua searches.",
+    description: "List locally saved Prom.ua searches.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "prom_saved_search_create",
-    description: "Save a Prom.ua search definition locally for repeat execution.",
+    description: "Save a structured Prom.ua search definition locally for repeat execution.",
     inputSchema: {
       type: "object",
       properties: {
@@ -43,10 +46,13 @@ export const tools = [
           type: "object",
           properties: {
             query: { type: "string", minLength: 1 },
-            limit: { type: "integer", minimum: 1, maximum: 20, default: 10 },
+            limit: { type: "integer", minimum: 1, maximum: 50, default: 20 },
+            offset: { type: "integer", minimum: 0, maximum: 10000, default: 0 },
             min_price: { type: "number", minimum: 0 },
             max_price: { type: "number", minimum: 0 },
             sort: { type: "string", enum: ["relevance", "price_asc", "price_desc"], default: "relevance" },
+            max_pages: { type: "integer", minimum: 1, maximum: 10, default: 5 },
+            source: { type: "string", enum: ["auto", "prom", "external"], default: "auto" },
           },
           required: ["query"],
           additionalProperties: false,
@@ -68,7 +74,7 @@ export const tools = [
   },
   {
     name: "prom_saved_search_run",
-    description: "Run a locally saved Prom.ua search through the configured Brave/SearXNG provider.",
+    description: "Run a locally saved Prom.ua search using direct Prom SSR with the configured fallback behavior.",
     inputSchema: {
       type: "object",
       properties: { id: { type: "string", minLength: 1 } },
