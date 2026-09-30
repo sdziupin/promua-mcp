@@ -257,60 +257,58 @@ docker run --rm -i --env-file .env promua-mcp
 - direct Prom search fail-closed, якщо очікувана JSON-LD структура зникне;
 - DuckDuckGo challenge розпізнається, а не обходиться.
 
-## Публікація в npm
+## Гілки та автоматичні релізи
 
-Публікація автоматизована через GitHub Actions у `.github/workflows/publish-npm.yml`.
+Основна розробка ведеться в **`devel`**. Гілка **`main`** використовується тільки для релізів.
 
-### Одноразове налаштування репозиторію
+Звичайний процес:
 
-Створіть npm **Granular Access Token** із правами запису для пакета, придатний для неінтерактивної публікації, і додайте його в GitHub repository → Actions secrets під точною назвою:
+1. робота в `devel` (або короткій feature-гілці з PR у `devel`);
+2. CI має залишатися зеленим;
+3. PR з `devel` у `main`;
+4. merge PR;
+5. успішний merge у `main` автоматично створює GitHub Release і публікує npm.
+
+Після bootstrap прямі push у `main` відхиляються policy-workflow. На рівні GitHub також варто увімкнути server-side branch protection із обов'язковими PR та checks CI/Main Branch Policy.
+
+### Автоматичне версіонування
+
+Кожен успішний merge у `main` створює реліз.
+
+- Якщо поточна repo-версія вже опублікована, workflow автоматично піднімає **patch**.
+- Для свідомого minor/major релізу достатньо підняти версію в `devel` наперед, наприклад до `0.4.0` або `1.0.0`. Якщо вона вища за поточну npm-версію, використовується саме вона.
+- Release workflow створює окремий release-only commit під version tag, тому йому не потрібно пушити version bump назад у захищений `main`.
+
+Перший автоматичний реліз використовує поточну repo-версію, якщо пакет ще не опублікований.
+
+### npm authentication
+
+Створіть npm **Granular Access Token** із publish-доступом і додайте його в GitHub Actions secrets під точною назвою:
 
 ```text
 NPM
 ```
 
-Workflow передає його тільки як:
+Workflow використовує його тільки як:
 
 ```text
 NODE_AUTH_TOKEN=${{ secrets.NPM }}
 ```
 
-Сам token ніколи не зберігається в репозиторії.
+Перед публікацією запускається `npm whoami`; відсутній, протермінований або неправильний secret зупиняє release до publish.
 
-> npm зараз вимагає 2FA для публікації або granular token із дозволом bypass 2FA для неінтерактивного direct publish. Для довгострокового CI/CD npm рекомендує Trusted Publishing; у цьому репозиторії наразі свідомо використовується запитаний GitHub secret `NPM`.
+### Перевірки перед релізом
 
-### Процес релізу
+Перед публікацією GitHub Actions перевіряє:
 
-1. Одночасно оновіть версію в `package.json` і `package-lock.json`, наприклад:
-
-```bash
-npm version patch --no-git-tag-version
-```
-
-2. Перевірте локально:
-
-```bash
-npm ci
-npm run check
-npm test
-npm run build
-npm run test:runtime
-npm run verify:package
-```
-
-3. Закомітьте зміну версії та дочекайтесь зеленого CI на Node 20, 22 і 24.
-4. Створіть/push tag, який точно відповідає версії пакета, наприклад `v0.3.2`.
-5. Створіть **GitHub Release** з цього tag і опублікуйте release.
-
-Публікація GitHub Release запускає npm workflow. Перед `npm publish` він перевіряє:
-
-- release tag точно дорівнює версії з `package.json`;
-- tagged commit входить в історію `main`;
+- update `main` походить від merged PR (крім одноразового bootstrap release);
+- ім'я npm-пакета, наявні npm metadata та repository URL відповідають цьому проєкту;
 - locked dependencies встановлюються через `npm ci`;
-- typecheck, unit tests і build проходять;
-- зібраний MCP реально проходить stdio handshake і повертає tools;
-- npm tarball містить потрібні файли й не містить source/tests/workflows;
-- така версія пакета ще не існує в npm.
+- typecheck та unit tests проходять;
+- build проходить;
+- зібраний MCP реально проходить stdio handshake і віддає tools;
+- npm tarball містить очікувані файли та не містить source/tests/workflows;
+- ця версія ще не опублікована.
 
 Фінальна команда:
 
@@ -318,15 +316,9 @@ npm run verify:package
 npm publish --access public --provenance
 ```
 
-### Перевірка npm-пакета
+Той самий workflow створює version tag і GitHub Release.
 
-```bash
-npm run verify:package
-```
-
-виконує `npm pack --json --dry-run` і перевіряє фактичний вміст npm tarball, включно з CLI shebang та `dist/index.js`.
-
-## Розробка
+## Розробка## Розробка
 
 ```bash
 npm ci
