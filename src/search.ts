@@ -1,6 +1,5 @@
 import type { Config } from "./config.js";
-import { configuredSearchProvider } from "./config.js";
-import { requestJson } from "./http.js";
+import { searchDuckDuckGoProm } from "./duckduckgo.js";
 import { searchPromMarketplace } from "./prom-marketplace.js";
 
 export interface MarketplaceSearchResult {
@@ -18,21 +17,12 @@ export interface MarketplaceSearchSpec {
   max_price?: number;
   sort?: "relevance" | "price_asc" | "price_desc";
   max_pages?: number;
-  source?: "auto" | "prom" | "external";
+  source?: "auto" | "prom" | "duckduckgo";
 }
 
 function clampInteger(value: number | undefined, fallback: number, min: number, max: number): number {
   const normalized = Number.isFinite(value) ? Math.trunc(value!) : fallback;
   return Math.min(max, Math.max(min, normalized));
-}
-
-function isPromUrl(value: string): boolean {
-  try {
-    const hostname = new URL(value).hostname.toLowerCase();
-    return hostname === "prom.ua" || hostname.endsWith(".prom.ua");
-  } catch {
-    return false;
-  }
 }
 
 export function buildPromSearchUrl(query: string): string {
@@ -51,92 +41,10 @@ export function parsePriceUahGuess(text: string | undefined): number | undefined
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function uniquePromResults(results: MarketplaceSearchResult[]): MarketplaceSearchResult[] {
-  const seen = new Set<string>();
-  const output: MarketplaceSearchResult[] = [];
-
-  for (const result of results) {
-    if (!isPromUrl(result.url) || seen.has(result.url)) continue;
-    seen.add(result.url);
-    output.push(result);
-  }
-  return output;
-}
-
-interface BraveResponse {
-  web?: {
-    results?: Array<{
-      title?: string;
-      url?: string;
-      description?: string;
-    }>;
-  };
-}
-
-async function searchBrave(config: Config, query: string, requested: number): Promise<MarketplaceSearchResult[]> {
-  const params = new URLSearchParams({
-    q: `site:prom.ua ${query}`,
-    count: String(Math.min(Math.max(requested, 10), 20)),
-    country: "UA",
-    search_lang: "uk",
-    safesearch: "moderate",
-  });
-
-  const data = await requestJson<BraveResponse>(
-    `https://api.search.brave.com/res/v1/web/search?${params.toString()}`,
-    {
-      timeoutMs: config.httpTimeoutMs,
-      headers: {
-        "X-Subscription-Token": config.braveApiKey!,
-      },
-    },
-  );
-
-  return uniquePromResults(
-    (data.web?.results ?? [])
-      .filter((item): item is { title: string; url: string; description?: string } => Boolean(item.title && item.url))
-      .map((item) => ({
-        title: item.title,
-        url: item.url,
-        description: item.description,
-        price_uah_guess: parsePriceUahGuess(`${item.title} ${item.description ?? ""}`),
-      })),
-  );
-}
-
-interface SearxResponse {
-  results?: Array<{
-    title?: string;
-    url?: string;
-    content?: string;
-  }>;
-}
-
-async function searchSearxng(config: Config, query: string): Promise<MarketplaceSearchResult[]> {
-  const params = new URLSearchParams({
-    q: `site:prom.ua ${query}`,
-    format: "json",
-    language: "uk-UA",
-    safesearch: "1",
-  });
-  const data = await requestJson<SearxResponse>(
-    `${config.searxngUrl}/search?${params.toString()}`,
-    { timeoutMs: config.httpTimeoutMs },
-  );
-
-  return uniquePromResults(
-    (data.results ?? [])
-      .filter((item): item is { title: string; url: string; content?: string } => Boolean(item.title && item.url))
-      .map((item) => ({
-        title: item.title,
-        url: item.url,
-        description: item.content,
-        price_uah_guess: parsePriceUahGuess(`${item.title} ${item.content ?? ""}`),
-      })),
-  );
-}
-
-function applyExternalFilters(results: MarketplaceSearchResult[], spec: MarketplaceSearchSpec): MarketplaceSearchResult[] {
+function applyDuckDuckGoFilters(
+  results: MarketplaceSearchResult[],
+  spec: MarketplaceSearchSpec,
+): MarketplaceSearchResult[] {
   let filtered = results.filter((result) => {
     if (spec.min_price !== undefined && (result.price_uah_guess === undefined || result.price_uah_guess < spec.min_price)) return false;
     if (spec.max_price !== undefined && (result.price_uah_guess === undefined || result.price_uah_guess > spec.max_price)) return false;
@@ -152,12 +60,11 @@ function applyExternalFilters(results: MarketplaceSearchResult[], spec: Marketpl
   return filtered;
 }
 
-export async function searchPromProductsExternal(
+export async function searchPromProductsDuckDuckGo(
   config: Config,
   spec: MarketplaceSearchSpec,
 ): Promise<{
-  source: "external_search";
-  provider: "brave" | "searxng";
+  source: "duckduckgo";
   query: string;
   source_total: null;
   returned: number;
@@ -173,24 +80,23 @@ export async function searchPromProductsExternal(
   const query = spec.query.trim();
   if (!query) throw new Error("query must not be empty");
 
-  const provider = configuredSearchProvider(config);
-  if (!provider) {
-    throw new Error("External fallback requires BRAVE_API_KEY or SEARXNG_URL");
-  }
-
   const limit = clampInteger(spec.limit, 10, 1, 20);
   const offset = clampInteger(spec.offset, 0, 0, 20);
-  const raw = provider === "brave"
-    ? await searchBrave(config, query, 20)
-    : await searchSearxng(config, query);
+  const raw = await searchDuckDuckGoProm(config, query);
 
-  const filtered = applyExternalFilters(raw, spec);
+  const normalized: MarketplaceSearchResult[] = raw.map((item) => ({
+    title: item.title,
+    url: item.url,
+    description: item.description,
+    price_uah_guess: parsePriceUahGuess(`${item.title} ${item.description ?? ""}`),
+  }));
+
+  const filtered = applyDuckDuckGoFilters(normalized, spec);
   const results = filtered.slice(offset, offset + limit);
   const { query: _query, ...filters } = spec;
 
   return {
-    source: "external_search",
-    provider,
+    source: "duckduckgo",
     query,
     source_total: null,
     returned: results.length,
@@ -203,7 +109,8 @@ export async function searchPromProductsExternal(
       : "source_order",
     filters,
     results,
-    warning: "External search is a fallback and is not an exhaustive Prom.ua catalog query.",
+    warning:
+      "DuckDuckGo is a no-auth fallback, not an exhaustive Prom.ua catalog query; it can also throttle automated requests.",
   };
 }
 
@@ -225,8 +132,8 @@ export async function searchPromProducts(
   }
 
   const source = spec.source ?? "auto";
-  if (source === "external") {
-    return searchPromProductsExternal(config, spec);
+  if (source === "duckduckgo") {
+    return searchPromProductsDuckDuckGo(config, spec);
   }
   if (source === "prom") {
     return searchPromMarketplace(config, spec);
@@ -234,13 +141,19 @@ export async function searchPromProducts(
 
   try {
     return await searchPromMarketplace(config, spec);
-  } catch (error) {
-    if (!configuredSearchProvider(config)) throw error;
-
-    const fallback = await searchPromProductsExternal(config, spec);
-    return {
-      ...fallback,
-      fallback_reason: error instanceof Error ? error.message : String(error),
-    };
+  } catch (promError) {
+    try {
+      const fallback = await searchPromProductsDuckDuckGo(config, spec);
+      return {
+        ...fallback,
+        fallback_reason: promError instanceof Error ? promError.message : String(promError),
+      };
+    } catch (duckDuckGoError) {
+      const promMessage = promError instanceof Error ? promError.message : String(promError);
+      const ddgMessage = duckDuckGoError instanceof Error ? duckDuckGoError.message : String(duckDuckGoError);
+      throw new Error(
+        `Direct Prom.ua search failed (${promMessage}); DuckDuckGo fallback also failed (${ddgMessage})`,
+      );
+    }
   }
 }
