@@ -1,6 +1,6 @@
 {
   "name": "promua-mcp",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Browser-free MCP server for direct Prom.ua marketplace search and seller Public API operations",
   "type": "module",
   "license": "MIT",
@@ -28,6 +28,7 @@
   "files": [
     "dist",
     "README.md",
+    "README.uk.md",
     "LICENSE"
   ],
   "engines": {
