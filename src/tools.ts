@@ -13,7 +13,7 @@ const paginationProperties = {
 export const tools = [
   {
     name: "prom_search_products",
-    description: "Search Prom.ua directly via its public SSR search page and Product JSON-LD. Falls back to Brave/SearXNG only if configured and direct Prom parsing fails.",
+    description: "Search Prom.ua directly via its public SSR search page and Product JSON-LD. Falls back to DuckDuckGo only if configured and direct Prom parsing fails.",
     inputSchema: {
       type: "object",
       properties: {
@@ -24,7 +24,7 @@ export const tools = [
         max_price: { type: "number", minimum: 0, description: "Maximum product price in UAH; applied client-side to Prom JSON-LD prices." },
         sort: { type: "string", enum: ["relevance", "price_asc", "price_desc"], default: "relevance" },
         max_pages: { type: "integer", minimum: 1, maximum: 10, default: 5, description: "Maximum Prom search pages to scan for client-side filters/sorting." },
-        source: { type: "string", enum: ["auto", "prom", "external"], default: "auto", description: "auto = direct Prom SSR first; prom = require direct Prom; external = force Brave/SearXNG fallback." },
+        source: { type: "string", enum: ["auto", "prom", "duckduckgo"], default: "auto", description: "auto = direct Prom SSR first; prom = require direct Prom; external = force DuckDuckGo fallback." },
       },
       required: ["query"],
       additionalProperties: false,
@@ -52,7 +52,7 @@ export const tools = [
             max_price: { type: "number", minimum: 0 },
             sort: { type: "string", enum: ["relevance", "price_asc", "price_desc"], default: "relevance" },
             max_pages: { type: "integer", minimum: 1, maximum: 10, default: 5 },
-            source: { type: "string", enum: ["auto", "prom", "external"], default: "auto" },
+            source: { type: "string", enum: ["auto", "prom", "duckduckgo"], default: "auto" },
           },
           required: ["query"],
           additionalProperties: false,
@@ -74,7 +74,7 @@ export const tools = [
   },
   {
     name: "prom_saved_search_run",
-    description: "Run a locally saved Prom.ua search using direct Prom SSR with the configured fallback behavior.",
+    description: "Run a locally saved Prom.ua search using direct Prom SSR with DuckDuckGo fallback.",
     inputSchema: {
       type: "object",
       properties: { id: { type: "string", minLength: 1 } },
