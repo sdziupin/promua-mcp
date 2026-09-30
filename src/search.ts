@@ -1,6 +1,7 @@
 import type { Config } from "./config.js";
 import { configuredSearchProvider } from "./config.js";
 import { requestJson } from "./http.js";
+import { searchPromMarketplace } from "./prom-marketplace.js";
 
 export interface MarketplaceSearchResult {
   title: string;
@@ -12,9 +13,17 @@ export interface MarketplaceSearchResult {
 export interface MarketplaceSearchSpec {
   query: string;
   limit?: number;
+  offset?: number;
   min_price?: number;
   max_price?: number;
   sort?: "relevance" | "price_asc" | "price_desc";
+  max_pages?: number;
+  source?: "auto" | "prom" | "external";
+}
+
+function clampInteger(value: number | undefined, fallback: number, min: number, max: number): number {
+  const normalized = Number.isFinite(value) ? Math.trunc(value!) : fallback;
+  return Math.min(max, Math.max(min, normalized));
 }
 
 function isPromUrl(value: string): boolean {
@@ -127,7 +136,7 @@ async function searchSearxng(config: Config, query: string): Promise<Marketplace
   );
 }
 
-function applyFilters(results: MarketplaceSearchResult[], spec: MarketplaceSearchSpec): MarketplaceSearchResult[] {
+function applyExternalFilters(results: MarketplaceSearchResult[], spec: MarketplaceSearchSpec): MarketplaceSearchResult[] {
   let filtered = results.filter((result) => {
     if (spec.min_price !== undefined && (result.price_uah_guess === undefined || result.price_uah_guess < spec.min_price)) return false;
     if (spec.max_price !== undefined && (result.price_uah_guess === undefined || result.price_uah_guess > spec.max_price)) return false;
@@ -135,50 +144,95 @@ function applyFilters(results: MarketplaceSearchResult[], spec: MarketplaceSearc
   });
 
   if (spec.sort === "price_asc") {
-    filtered = filtered.sort((a, b) => (a.price_uah_guess ?? Infinity) - (b.price_uah_guess ?? Infinity));
+    filtered = [...filtered].sort((a, b) => (a.price_uah_guess ?? Infinity) - (b.price_uah_guess ?? Infinity));
   } else if (spec.sort === "price_desc") {
-    filtered = filtered.sort((a, b) => (b.price_uah_guess ?? -1) - (a.price_uah_guess ?? -1));
+    filtered = [...filtered].sort((a, b) => (b.price_uah_guess ?? -1) - (a.price_uah_guess ?? -1));
   }
 
   return filtered;
+}
+
+export async function searchPromProductsExternal(
+  config: Config,
+  spec: MarketplaceSearchSpec,
+): Promise<{
+  source: "external_search";
+  provider: "brave" | "searxng";
+  query: string;
+  source_total: null;
+  returned: number;
+  offset: number;
+  next_offset: null;
+  scanned_pages: [];
+  exhaustive: false;
+  sort_scope: "source_order" | "scanned_window";
+  filters: Omit<MarketplaceSearchSpec, "query">;
+  results: MarketplaceSearchResult[];
+  warning: string;
+}> {
+  const query = spec.query.trim();
+  if (!query) throw new Error("query must not be empty");
+
+  const provider = configuredSearchProvider(config);
+  if (!provider) {
+    throw new Error("External fallback requires BRAVE_API_KEY or SEARXNG_URL");
+  }
+
+  const limit = clampInteger(spec.limit, 10, 1, 20);
+  const offset = clampInteger(spec.offset, 0, 0, 20);
+  const raw = provider === "brave"
+    ? await searchBrave(config, query, 20)
+    : await searchSearxng(config, query);
+
+  const filtered = applyExternalFilters(raw, spec);
+  const results = filtered.slice(offset, offset + limit);
+  const { query: _query, ...filters } = spec;
+
+  return {
+    source: "external_search",
+    provider,
+    query,
+    source_total: null,
+    returned: results.length,
+    offset,
+    next_offset: null,
+    scanned_pages: [],
+    exhaustive: false,
+    sort_scope: spec.sort === "price_asc" || spec.sort === "price_desc"
+      ? "scanned_window"
+      : "source_order",
+    filters,
+    results,
+    warning: "External search is a fallback and is not an exhaustive Prom.ua catalog query.",
+  };
 }
 
 export async function searchPromProducts(
   config: Config,
   queryOrSpec: string | MarketplaceSearchSpec,
   legacyLimit = 10,
-): Promise<{
-  provider: "brave" | "searxng";
-  query: string;
-  filters: Omit<MarketplaceSearchSpec, "query">;
-  results: MarketplaceSearchResult[];
-  exhaustive: false;
-}> {
+): Promise<unknown> {
   const spec: MarketplaceSearchSpec = typeof queryOrSpec === "string"
     ? { query: queryOrSpec, limit: legacyLimit }
     : queryOrSpec;
 
-  const normalizedQuery = spec.query.trim();
-  if (!normalizedQuery) throw new Error("query must not be empty");
-
-  const normalizedLimit = Math.min(Math.max(Math.trunc(spec.limit || 10), 1), 20);
-  const provider = configuredSearchProvider(config);
-  if (!provider) {
-    throw new Error("Marketplace search requires BRAVE_API_KEY or SEARXNG_URL");
+  const source = spec.source ?? "auto";
+  if (source === "external") {
+    return searchPromProductsExternal(config, spec);
+  }
+  if (source === "prom") {
+    return searchPromMarketplace(config, spec);
   }
 
-  const raw = provider === "brave"
-    ? await searchBrave(config, normalizedQuery, 20)
-    : await searchSearxng(config, normalizedQuery);
+  try {
+    return await searchPromMarketplace(config, spec);
+  } catch (error) {
+    if (!configuredSearchProvider(config)) throw error;
 
-  const results = applyFilters(raw, spec).slice(0, normalizedLimit);
-  const { query: _query, ...filters } = spec;
-
-  return {
-    provider,
-    query: normalizedQuery,
-    filters,
-    results,
-    exhaustive: false,
-  };
+    const fallback = await searchPromProductsExternal(config, spec);
+    return {
+      ...fallback,
+      fallback_reason: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
