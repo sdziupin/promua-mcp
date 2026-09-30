@@ -1,3 +1,6 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 export type SearchProvider = "brave" | "searxng" | null;
 
 export interface Config {
@@ -7,6 +10,12 @@ export interface Config {
   braveApiKey?: string;
   searxngUrl?: string;
   httpTimeoutMs: number;
+  buyerProfileDir: string;
+  buyerSavedSearchesFile: string;
+  buyerHeadless: boolean;
+  buyerAllowMutations: boolean;
+  buyerActionTimeoutMs: number;
+  buyerPageDelayMs: number;
 }
 
 function envBoolean(value: string | undefined, fallback = false): boolean {
@@ -25,6 +34,7 @@ function trimTrailingSlash(value: string): string {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  const dataDir = env.PROM_BUYER_DATA_DIR?.trim() || join(homedir(), ".promua-mcp");
   return {
     promApiToken: env.PROM_API_TOKEN?.trim() || undefined,
     promApiBaseUrl: trimTrailingSlash(env.PROM_API_BASE_URL?.trim() || "https://my.prom.ua/api/v1"),
@@ -32,6 +42,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     braveApiKey: env.BRAVE_API_KEY?.trim() || undefined,
     searxngUrl: env.SEARXNG_URL ? trimTrailingSlash(env.SEARXNG_URL.trim()) : undefined,
     httpTimeoutMs: envInteger(env.PROM_HTTP_TIMEOUT_MS, 15_000),
+    buyerProfileDir: env.PROM_BUYER_PROFILE_DIR?.trim() || join(dataDir, "browser-profile"),
+    buyerSavedSearchesFile: env.PROM_BUYER_SAVED_SEARCHES_FILE?.trim() || join(dataDir, "saved-searches.json"),
+    buyerHeadless: envBoolean(env.PROM_BUYER_HEADLESS, false),
+    buyerAllowMutations: envBoolean(env.PROM_BUYER_ALLOW_MUTATIONS, false),
+    buyerActionTimeoutMs: envInteger(env.PROM_BUYER_ACTION_TIMEOUT_MS, 15_000),
+    buyerPageDelayMs: envInteger(env.PROM_BUYER_PAGE_DELAY_MS, 350),
   };
 }
 
