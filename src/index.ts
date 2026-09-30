@@ -6,13 +6,14 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { loadConfig } from "./config.js";
 import { handleTool } from "./handlers.js";
 import { tools } from "./tools.js";
+import { VERSION } from "./version.js";
 
 const config = loadConfig();
 
 const server = new Server(
   {
     name: "promua-mcp",
-    version: "0.3.1",
+    version: VERSION,
   },
   {
     capabilities: {
