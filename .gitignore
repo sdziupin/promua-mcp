@@ -7,5 +7,4 @@ dist/
 .DS_Store
 coverage/
 .promua-mcp/
-browser-profile/
 saved-searches.json
