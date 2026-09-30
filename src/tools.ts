@@ -1,5 +1,3 @@
-import { buyerTools } from "./buyer/tools.js";
-
 const idSchema = {
   anyOf: [
     { type: "string", minLength: 1 },
@@ -12,17 +10,69 @@ const paginationProperties = {
   last_id: { type: "integer", minimum: 0, description: "Prom.ua cursor/id for pagination where supported." },
 } as const;
 
-const sellerAndSearchTools = [
+export const tools = [
   {
     name: "prom_search_products",
-    description: "Search the public Prom.ua marketplace through Brave Search or SearXNG. Does not scrape Prom.ua pages directly.",
+    description: "Search Prom.ua through Brave Search or SearXNG. Browser-free and best-effort, not an exhaustive Prom.ua catalog query.",
     inputSchema: {
       type: "object",
       properties: {
         query: { type: "string", minLength: 1, description: "Product search query, in Ukrainian or any other language." },
         limit: { type: "integer", minimum: 1, maximum: 20, default: 10 },
+        min_price: { type: "number", minimum: 0, description: "Filter only results whose search snippet exposes a price at or above this value." },
+        max_price: { type: "number", minimum: 0, description: "Filter only results whose search snippet exposes a price at or below this value." },
+        sort: { type: "string", enum: ["relevance", "price_asc", "price_desc"], default: "relevance" },
       },
       required: ["query"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "prom_saved_search_list",
+    description: "List locally saved browser-free Prom.ua searches.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "prom_saved_search_create",
+    description: "Save a Prom.ua search definition locally for repeat execution.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", minLength: 1 },
+        search: {
+          type: "object",
+          properties: {
+            query: { type: "string", minLength: 1 },
+            limit: { type: "integer", minimum: 1, maximum: 20, default: 10 },
+            min_price: { type: "number", minimum: 0 },
+            max_price: { type: "number", minimum: 0 },
+            sort: { type: "string", enum: ["relevance", "price_asc", "price_desc"], default: "relevance" },
+          },
+          required: ["query"],
+          additionalProperties: false,
+        },
+      },
+      required: ["name", "search"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "prom_saved_search_delete",
+    description: "Delete a locally saved Prom.ua search.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string", minLength: 1 } },
+      required: ["id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "prom_saved_search_run",
+    description: "Run a locally saved Prom.ua search through the configured Brave/SearXNG provider.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string", minLength: 1 } },
+      required: ["id"],
       additionalProperties: false,
     },
   },
@@ -213,5 +263,3 @@ const sellerAndSearchTools = [
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
 ];
-
-export const tools = [...buyerTools, ...sellerAndSearchTools];
