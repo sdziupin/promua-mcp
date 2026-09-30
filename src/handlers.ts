@@ -64,7 +64,7 @@ export async function handleTool(config: Config, name: string, rawArgs: unknown)
       case "prom_buyer_open_login":
         return ok(await buyer.openLogin());
       case "prom_buyer_search":
-        return ok(await buyer.search(args as BuyerSearchArgs));
+        return ok(await buyer.search(searchArgs(args)));
       case "prom_buyer_product":
         return ok(await buyer.product(required<string>(args, "url")));
       case "prom_buyer_favorites":
