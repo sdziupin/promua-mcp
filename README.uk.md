@@ -17,27 +17,35 @@ MCP-сервер для **Prom.ua** без браузерної автомати
 
 ## Швидкий старт
 
-Для звичайного пошуку товарів жодні credentials не потрібні:
+Опублікований npm-пакет не потребує жодних credentials для звичайного пошуку товарів.
+
+Можна запустити напряму:
 
 ```bash
-npm install
-npm run build
+npx -y promua-mcp
 ```
 
-Далі достатньо підключити MCP:
+Або підключити в MCP-клієнті:
 
 ```json
 {
   "mcpServers": {
     "promua": {
-      "command": "node",
-      "args": ["/absolute/path/to/promua-mcp/dist/index.js"]
+      "command": "npx",
+      "args": ["-y", "promua-mcp"]
     }
   }
 }
 ```
 
-Цього вже достатньо для пошуку товарів.
+Також можна встановити глобально:
+
+```bash
+npm install -g promua-mcp
+promua-mcp
+```
+
+Для пошуку по маркетплейсу не потрібні ні Prom.ua token, ні search API key.
 
 ## Пошук по маркетплейсу
 
@@ -249,12 +257,84 @@ docker run --rm -i --env-file .env promua-mcp
 - direct Prom search fail-closed, якщо очікувана JSON-LD структура зникне;
 - DuckDuckGo challenge розпізнається, а не обходиться.
 
-## Розробка
+## Публікація в npm
+
+Публікація автоматизована через GitHub Actions у `.github/workflows/publish-npm.yml`.
+
+### Одноразове налаштування репозиторію
+
+Створіть npm **Granular Access Token** із правами запису для пакета, придатний для неінтерактивної публікації, і додайте його в GitHub repository → Actions secrets під точною назвою:
+
+```text
+NPM
+```
+
+Workflow передає його тільки як:
+
+```text
+NODE_AUTH_TOKEN=${{ secrets.NPM }}
+```
+
+Сам token ніколи не зберігається в репозиторії.
+
+> npm зараз вимагає 2FA для публікації або granular token із дозволом bypass 2FA для неінтерактивного direct publish. Для довгострокового CI/CD npm рекомендує Trusted Publishing; у цьому репозиторії наразі свідомо використовується запитаний GitHub secret `NPM`.
+
+### Процес релізу
+
+1. Одночасно оновіть версію в `package.json` і `package-lock.json`, наприклад:
 
 ```bash
+npm version patch --no-git-tag-version
+```
+
+2. Перевірте локально:
+
+```bash
+npm ci
 npm run check
 npm test
 npm run build
+npm run test:runtime
+npm run verify:package
+```
+
+3. Закомітьте зміну версії та дочекайтесь зеленого CI на Node 20, 22 і 24.
+4. Створіть/push tag, який точно відповідає версії пакета, наприклад `v0.3.2`.
+5. Створіть **GitHub Release** з цього tag і опублікуйте release.
+
+Публікація GitHub Release запускає npm workflow. Перед `npm publish` він перевіряє:
+
+- release tag точно дорівнює версії з `package.json`;
+- tagged commit входить в історію `main`;
+- locked dependencies встановлюються через `npm ci`;
+- typecheck, unit tests і build проходять;
+- зібраний MCP реально проходить stdio handshake і повертає tools;
+- npm tarball містить потрібні файли й не містить source/tests/workflows;
+- така версія пакета ще не існує в npm.
+
+Фінальна команда:
+
+```bash
+npm publish --access public --provenance
+```
+
+### Перевірка npm-пакета
+
+```bash
+npm run verify:package
+```
+
+виконує `npm pack --json --dry-run` і перевіряє фактичний вміст npm tarball, включно з CLI shebang та `dist/index.js`.
+
+## Розробка
+
+```bash
+npm ci
+npm run check
+npm test
+npm run build
+npm run test:runtime
+npm run verify:package
 ```
 
 ## Подяка
