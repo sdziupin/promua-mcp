@@ -38,9 +38,12 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test tests/*.test.ts",
+    "test:runtime": "node tests/runtime-smoke.mjs",
+    "verify:package": "node scripts/verify-package.mjs",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "prepublishOnly": "npm run check && npm test && npm run build"
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run check && npm test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.31.0",
@@ -50,5 +53,9 @@
     "@types/node": "^22.10.2",
     "tsx": "^4.20.5",
     "typescript": "^5.7.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }
