@@ -1,19 +1,15 @@
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { Config } from "./config.js";
 import { PromApiClient, type JsonObject } from "./prom-api.js";
 import { buildPromSearchUrl, searchPromProducts } from "./search.js";
 
-export interface McpTextResult {
-  content: Array<{ type: "text"; text: string }>;
-  isError?: boolean;
-}
-
-function ok(value: unknown): McpTextResult {
+function ok(value: unknown): CallToolResult {
   return {
     content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
   };
 }
 
-function fail(error: unknown): McpTextResult {
+function fail(error: unknown): CallToolResult {
   const message = error instanceof Error ? error.message : String(error);
   return {
     content: [{ type: "text", text: message }],
@@ -33,7 +29,7 @@ function required<T>(args: JsonObject, key: string): T {
   return value as T;
 }
 
-export async function handleTool(config: Config, name: string, rawArgs: unknown): Promise<McpTextResult> {
+export async function handleTool(config: Config, name: string, rawArgs: unknown): Promise<CallToolResult> {
   try {
     const args = argsObject(rawArgs);
     const api = new PromApiClient(config);
