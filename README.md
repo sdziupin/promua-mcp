@@ -17,27 +17,35 @@ There is **no Playwright, Chromium, browser automation, browser profile, cookie/
 
 ## Quick start
 
-For normal product search, no credentials are required:
+The published npm package needs no credentials for normal product search.
+
+Run it directly:
 
 ```bash
-npm install
-npm run build
+npx -y promua-mcp
 ```
 
-Then configure your MCP client:
+Or configure an MCP client to spawn it:
 
 ```json
 {
   "mcpServers": {
     "promua": {
-      "command": "node",
-      "args": ["/absolute/path/to/promua-mcp/dist/index.js"]
+      "command": "npx",
+      "args": ["-y", "promua-mcp"]
     }
   }
 }
 ```
 
-That is enough for marketplace search.
+A global install also works:
+
+```bash
+npm install -g promua-mcp
+promua-mcp
+```
+
+No Prom.ua token or search API key is required for marketplace search.
 
 ## Marketplace search
 
@@ -239,12 +247,84 @@ docker run --rm -i --env-file .env promua-mcp
 - direct Prom search fails closed if the expected JSON-LD structure disappears;
 - DuckDuckGo challenges are detected, not bypassed.
 
-## Development
+## Publishing to npm
+
+Publishing is automated by GitHub Actions in `.github/workflows/publish-npm.yml`.
+
+### One-time repository setup
+
+Create an npm **Granular Access Token** with package write access suitable for non-interactive publishing, then add it to this GitHub repository as an Actions secret named exactly:
+
+```text
+NPM
+```
+
+The workflow passes it only as:
+
+```text
+NODE_AUTH_TOKEN=${{ secrets.NPM }}
+```
+
+The token is never committed to this repository.
+
+> npm currently requires 2FA for publishing, or a granular token configured to bypass 2FA for non-interactive direct publishing. npm recommends Trusted Publishing for long-term CI/CD; this repository intentionally uses the requested `NPM` GitHub secret for now.
+
+### Release flow
+
+1. Bump `package.json` and `package-lock.json` together, for example:
 
 ```bash
+npm version patch --no-git-tag-version
+```
+
+2. Validate locally:
+
+```bash
+npm ci
 npm run check
 npm test
 npm run build
+npm run test:runtime
+npm run verify:package
+```
+
+3. Commit the version change and wait for CI to pass on Node 20, 22 and 24.
+4. Create/push a tag that exactly matches the package version, e.g. `v0.3.2`.
+5. Create a **GitHub Release** from that tag and publish the release.
+
+Publishing the GitHub Release triggers the npm workflow. Before `npm publish`, it verifies:
+
+- the release tag exactly matches `package.json` version;
+- the tagged commit belongs to `main` history;
+- locked dependencies install with `npm ci`;
+- typecheck, unit tests and build pass;
+- the built MCP server completes a real stdio handshake and exposes tools;
+- the npm tarball contains the expected files and no source/tests/workflows;
+- the exact package version is not already present on npm.
+
+The final command is:
+
+```bash
+npm publish --access public --provenance
+```
+
+### Package validation
+
+```bash
+npm run verify:package
+```
+
+runs `npm pack --json --dry-run` and verifies the actual npm package contents, including the CLI shebang and `dist/index.js`.
+
+## Development
+
+```bash
+npm ci
+npm run check
+npm test
+npm run build
+npm run test:runtime
+npm run verify:package
 ```
 
 ## Acknowledgment
