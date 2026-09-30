@@ -143,3 +143,27 @@ test("price sorting scans the requested window and reports non-exhaustive scope"
   assert.match(result.warning ?? "", /scanned Prom\.ua result window/);
   assert.deepEqual(result.results.map((item) => item.price), [209, 208, 207]);
 });
+
+
+test("treats total=0 as a valid empty search instead of a parser failure", async () => {
+  const fetchImpl: typeof fetch = async () =>
+    new Response('<html><script type="application/json">{"total":0}</script></html>', { status: 200 });
+
+  const result = await searchPromMarketplace(
+    config,
+    { query: "definitely-no-such-product", limit: 10 },
+    fetchImpl,
+  );
+
+  assert.equal(result.source_total, 0);
+  assert.equal(result.returned, 0);
+  assert.deepEqual(result.results, []);
+  assert.equal(result.exhaustive, true);
+});
+
+test("rejects inverted price ranges", async () => {
+  await assert.rejects(
+    () => searchPromMarketplace(config, { query: "ssd", min_price: 2000, max_price: 1000 }),
+    /min_price must be less than or equal to max_price/,
+  );
+});
