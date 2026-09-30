@@ -8,19 +8,11 @@ test("loadConfig uses safe defaults", () => {
   assert.equal(config.allowWrites, false);
   assert.equal(config.httpTimeoutMs, 15_000);
   assert.equal(configuredSearchProvider(config), null);
-  assert.equal(config.buyerHeadless, false);
-  assert.equal(config.buyerAllowMutations, false);
-  assert.match(config.buyerProfileDir, /\.promua-mcp.*browser-profile/);
+  assert.match(config.savedSearchesFile, /\.promua-mcp.*saved-searches\.json/);
 });
 
 test("Brave is preferred when both search providers are configured", () => {
   const config = loadConfig({ BRAVE_API_KEY: "brave", SEARXNG_URL: "https://search.example/" });
   assert.equal(configuredSearchProvider(config), "brave");
   assert.equal(config.searxngUrl, "https://search.example");
-});
-
-test("buyer mutation gate is opt-in", () => {
-  const config = loadConfig({ PROM_BUYER_ALLOW_MUTATIONS: "true", PROM_BUYER_HEADLESS: "true" });
-  assert.equal(config.buyerAllowMutations, true);
-  assert.equal(config.buyerHeadless, true);
 });
