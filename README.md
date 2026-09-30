@@ -1,5 +1,7 @@
 # promua-mcp
 
+**English** | [Українська](./README.uk.md)
+
 [![CI](https://github.com/sdziupin/promua-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/sdziupin/promua-mcp/actions/workflows/ci.yml)
 
 Browser-free MCP server for **Prom.ua**.
@@ -7,27 +9,51 @@ Browser-free MCP server for **Prom.ua**.
 It combines:
 
 1. **Direct marketplace search** against Prom.ua's public SSR search pages.
-2. **Optional Brave/SearXNG fallback** if direct Prom parsing fails.
-3. **Seller operations** through Prom.ua's official Public API v1.
-4. **Local saved searches** for repeatable MCP workflows.
+2. **DuckDuckGo HTML fallback** with no API key or account.
+3. **Optional seller tools** through Prom.ua's official Public API v1.
+4. **Local saved searches** for repeatable workflows.
 
 There is **no Playwright, Chromium, browser automation, browser profile, cookie/session storage, or GUI control**.
 
-## Direct marketplace search
+## Quick start
 
-`prom_search_products` now queries:
+For normal product search, no credentials are required:
+
+```bash
+npm install
+npm run build
+```
+
+Then configure your MCP client:
+
+```json
+{
+  "mcpServers": {
+    "promua": {
+      "command": "node",
+      "args": ["/absolute/path/to/promua-mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+That is enough for marketplace search.
+
+## Marketplace search
+
+`prom_search_products` first queries Prom.ua directly:
 
 ```text
 GET https://prom.ua/ua/search?search_term=<query>&page=<n>
 ```
 
-Prom embeds product cards as schema.org **Product JSON-LD**, so the MCP extracts structured data directly from the server-rendered HTML:
+Prom embeds product cards as schema.org **Product JSON-LD**, so the MCP can extract structured data from the server-rendered HTML:
 
 - product id
 - title
 - canonical URL
-- exact JSON-LD price / currency
-- min/max price when a Product contains several Offers
+- price / currency
+- min/max price when a product contains multiple offers
 - seller / sellers
 - availability
 - image
@@ -36,7 +62,7 @@ Prom embeds product cards as schema.org **Product JSON-LD**, so the MCP extracts
 - description
 - Prom's embedded total result count
 
-No API key is needed for direct marketplace search.
+No API token is required.
 
 ### Search arguments
 
@@ -53,53 +79,92 @@ No API key is needed for direct marketplace search.
 }
 ```
 
-- `source=auto` — direct Prom SSR first; Brave/SearXNG fallback only when configured and direct parsing fails.
+- `source=auto` — direct Prom SSR first, DuckDuckGo fallback if direct parsing fails.
 - `source=prom` — require direct Prom SSR.
-- `source=external` — force Brave/SearXNG.
-- `offset` maps efficiently to Prom pages when no client-side price filtering/sorting is needed.
-- `min_price` / `max_price` use real JSON-LD prices.
-- price sorting is performed over the scanned result window; the response tells you when the result is not exhaustive.
-- `source_total`, `scanned_pages`, `next_offset`, `exhaustive` and `warning` make pagination/coverage explicit.
+- `source=duckduckgo` — force the DuckDuckGo HTML fallback.
+- `offset` maps to Prom pages when possible.
+- `min_price` / `max_price` use Prom's JSON-LD prices for direct search.
+- `price_asc` / `price_desc` sort the scanned result window.
+- `source_total`, `scanned_pages`, `next_offset`, `exhaustive` and `warning` make coverage explicit.
 
-Prom currently exposes about 10 JSON-LD Product records per SSR search page, so deeper filtered searches may scan multiple pages up to `max_pages`.
+## DuckDuckGo fallback
 
-### External fallback
+The fallback uses DuckDuckGo's static no-JavaScript HTML search:
 
-Optional:
-
-```bash
-BRAVE_API_KEY=
-# or
-SEARXNG_URL=
+```text
+https://html.duckduckgo.com/html/
 ```
 
-The fallback is deliberately marked non-exhaustive and should not be confused with direct Prom catalog results.
+No API key, account or token is required.
 
-## Saved searches
+The fallback searches for `site:prom.ua <query>`, unwraps DuckDuckGo redirect URLs and returns only Prom.ua results.
 
-- `prom_saved_search_list`
-- `prom_saved_search_create`
-- `prom_saved_search_run`
-- `prom_saved_search_delete`
+It is intentionally treated as **best-effort and non-exhaustive**. DuckDuckGo may throttle automated requests or return a bot-detection challenge; the MCP detects that and fails clearly instead of trying to bypass it.
 
-Saved searches persist the same structured search arguments locally as JSON and replay them through the current search implementation.
+## Do I need `PROM_API_TOKEN`?
 
-## Search tools
+### For product search: **No**
 
-- `prom_search_products`
-- `prom_search_url`
-- `prom_saved_search_list`
-- `prom_saved_search_create`
-- `prom_saved_search_run`
-- `prom_saved_search_delete`
+If your use case is:
 
-## Buyer account actions
+- find products on Prom.ua;
+- compare prices;
+- filter by price;
+- paginate search results;
+- save and rerun searches;
 
-Buyer-account actions such as Favorites, cart changes, buyer order history and authenticated buyer messages are **not implemented**.
+leave `PROM_API_TOKEN` empty.
 
-They are not part of the documented Prom seller Public API, and this project will not emulate them using a browser. They should only be added when a stable HTTP/API contract is available.
+Marketplace search does not use the seller API.
 
-## Seller API — read
+### For managing your own Prom.ua store: **Yes**
+
+The token is useful only if you are a **Prom.ua seller** and want the MCP to work with your company's own cabinet data through the official Public API.
+
+Seller tools can read or manage:
+
+- your products and groups;
+- your orders;
+- your clients;
+- your messages;
+- delivery options;
+- payment options;
+- order statuses.
+
+Prom.ua describes its Public API as remote access to data in the **company cabinet**, not as a buyer/search API.
+
+You can create a token in the seller cabinet:
+
+```text
+Settings → API token management
+```
+
+Prom lets you choose permissions per API group: no access, read-only, or read/write.
+
+For read-only use, grant only the permissions you need.
+
+Official seller documentation:
+
+- https://public-api.docs.prom.ua/
+- https://support.prom.ua/hc/uk/articles/360020350478
+
+### Seller writes are separately disabled
+
+Even if a token has write permissions, this MCP blocks mutations unless you explicitly enable:
+
+```bash
+PROM_ALLOW_WRITES=true
+```
+
+So a read-only setup can simply keep:
+
+```bash
+PROM_ALLOW_WRITES=false
+```
+
+## Seller tools
+
+### Read
 
 - `prom_seller_list_products`
 - `prom_seller_get_product`
@@ -115,15 +180,7 @@ They are not part of the documented Prom seller Public API, and this project wil
 - `prom_seller_list_delivery_options`
 - `prom_seller_list_order_status_options`
 
-## Seller API — write
-
-Writes are disabled by default:
-
-```bash
-PROM_ALLOW_WRITES=true
-```
-
-Tools:
+### Write
 
 - `prom_seller_edit_products`
 - `prom_seller_edit_products_by_external_id`
@@ -131,51 +188,37 @@ Tools:
 - `prom_seller_set_message_status`
 - `prom_seller_reply_message`
 
-## Requirements
+## Saved searches
 
-- Node.js 20+
-- no credentials for direct marketplace search
-- optional Brave/SearXNG only for fallback
-- Prom.ua API token only for seller tools
+- `prom_saved_search_list`
+- `prom_saved_search_create`
+- `prom_saved_search_run`
+- `prom_saved_search_delete`
 
-## Install
+Saved searches are stored locally as JSON and replay the same structured search arguments.
 
-```bash
-npm install
-npm run build
-```
+## Buyer account actions
+
+Buyer-account actions such as Favorites, cart mutation, buyer order history and authenticated buyer messages are **not implemented**.
+
+They are not exposed by the documented Prom seller Public API, and this project intentionally does not emulate them with a browser.
 
 ## Configuration
+
+Minimal search-only setup:
+
+```bash
+PROM_HTTP_TIMEOUT_MS=15000
+PROM_DATA_DIR=
+PROM_SAVED_SEARCHES_FILE=
+```
+
+Optional seller mode:
 
 ```bash
 PROM_API_TOKEN=
 PROM_API_BASE_URL=https://my.prom.ua/api/v1
 PROM_ALLOW_WRITES=false
-
-# Optional fallback:
-BRAVE_API_KEY=
-SEARXNG_URL=
-
-PROM_DATA_DIR=
-PROM_SAVED_SEARCHES_FILE=
-PROM_HTTP_TIMEOUT_MS=15000
-```
-
-## MCP configuration
-
-```json
-{
-  "mcpServers": {
-    "promua": {
-      "command": "node",
-      "args": ["/absolute/path/to/promua-mcp/dist/index.js"],
-      "env": {
-        "PROM_API_TOKEN": "optional",
-        "BRAVE_API_KEY": "optional"
-      }
-    }
-  }
-}
 ```
 
 ## Docker
@@ -187,38 +230,14 @@ docker run --rm -i --env-file .env promua-mcp
 
 ## Safety / access model
 
-- public marketplace search uses ordinary HTTP GET requests only;
-- no browser automation and no access-control bypass;
-- no buyer-account cookies/sessions;
+- ordinary HTTP requests only;
+- no browser automation;
+- no access-control bypass;
+- no buyer cookies/sessions;
 - no checkout or payment automation;
-- seller writes are opt-in via `PROM_ALLOW_WRITES=true`;
-- search requests are capped by `max_pages`;
-- direct Prom parsing fails closed when Product JSON-LD disappears or changes unexpectedly.
-
-## Prom.ua seller Public API coverage
-
-Implemented endpoints include:
-
-- `GET /products/list`
-- `GET /products/{id}`
-- `GET /products/by_external_id/{id}`
-- `POST /products/edit`
-- `POST /products/edit_by_external_id`
-- `GET /orders/list`
-- `GET /orders/{id}`
-- `POST /orders/set_status`
-- `GET /clients/list`
-- `GET /clients/{id}`
-- `GET /messages/list`
-- `GET /messages/{id}`
-- `POST /messages/set_status`
-- `POST /messages/reply`
-- `GET /groups/list`
-- `GET /payment_options/list`
-- `GET /delivery_options/list`
-- `GET /order_status_options/list`
-
-Official seller API docs: https://public-api.docs.prom.ua/
+- seller writes are opt-in;
+- direct Prom search fails closed if the expected JSON-LD structure disappears;
+- DuckDuckGo challenges are detected, not bypassed.
 
 ## Development
 
@@ -231,7 +250,7 @@ npm run build
 ## Acknowledgment
 
 The direct Prom SSR / JSON-LD approach was validated against the MIT-licensed
-[cuzin85/marketua](https://github.com/cuzin85/marketua) Prom provider, then reimplemented in TypeScript with broader Product/Offer parsing, multi-page scanning, explicit coverage metadata and fallback support.
+[cuzin85/marketua](https://github.com/cuzin85/marketua) Prom provider, then reimplemented in TypeScript with broader Product/Offer parsing, multi-page scanning, explicit coverage metadata and a no-auth DuckDuckGo fallback.
 
 ## License
 
