@@ -13,7 +13,7 @@ const paginationProperties = {
 export const tools = [
   {
     name: "prom_search_products",
-    description: "Search Prom.ua directly via its public SSR search page and Product JSON-LD. Falls back to DuckDuckGo only if configured and direct Prom parsing fails.",
+    description: "Search Prom.ua directly via its public SSR search page and Product JSON-LD. Falls back to DuckDuckGo HTML search if direct Prom parsing fails.",
     inputSchema: {
       type: "object",
       properties: {
@@ -24,7 +24,7 @@ export const tools = [
         max_price: { type: "number", minimum: 0, description: "Maximum product price in UAH; applied client-side to Prom JSON-LD prices." },
         sort: { type: "string", enum: ["relevance", "price_asc", "price_desc"], default: "relevance" },
         max_pages: { type: "integer", minimum: 1, maximum: 10, default: 5, description: "Maximum Prom search pages to scan for client-side filters/sorting." },
-        source: { type: "string", enum: ["auto", "prom", "duckduckgo"], default: "auto", description: "auto = direct Prom SSR first; prom = require direct Prom; external = force DuckDuckGo fallback." },
+        source: { type: "string", enum: ["auto", "prom", "duckduckgo"], default: "auto", description: "auto = direct Prom SSR first; prom = require direct Prom; duckduckgo = force the no-auth DuckDuckGo HTML fallback." },
       },
       required: ["query"],
       additionalProperties: false,
