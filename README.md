@@ -2,27 +2,124 @@
 
 [![CI](https://github.com/sdziupin/promua-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/sdziupin/promua-mcp/actions/workflows/ci.yml)
 
-MCP server for **Prom.ua** with two separate capabilities:
+MCP server for **Prom.ua** with three independent layers:
 
-1. **Marketplace product discovery** through Brave Search or SearXNG, restricted to Prom.ua results.
-2. **Seller account operations** through Prom.ua's official Public API v1.
+1. **Public marketplace discovery** through Brave Search or SearXNG.
+2. **Buyer mode** through a persistent local Chromium session.
+3. **Seller mode** through Prom.ua's official Public API v1.
 
-The server intentionally does **not** scrape Prom.ua pages directly.
+## Buyer mode
 
-## Why
+Buyer mode is intended for personal Prom.ua workflows that the seller API does not expose.
 
-Prom.ua Public API is intended for a seller's own company data: products, orders, clients, messages, groups, payment/delivery options and related operations. It is not a general marketplace-search API.
+It can:
 
-For marketplace discovery, `promua-mcp` delegates search to a configured search provider and only returns Prom.ua URLs.
+- search Prom.ua directly and scan multiple result pages;
+- filter by price, availability, Prom payment, seller name and observed ratings;
+- sort collected results;
+- read a current product page;
+- list/add/remove Favorites;
+- list/add/remove cart items and change quantity;
+- read buyer order history;
+- find a seller covering the largest number of requested products;
+- save structured searches locally and run them again later.
 
-## Tools
+Buyer browser state is persistent, so you log in manually once and the session is reused.
 
-### Marketplace
+**Checkout, order placement and payment are deliberately not automated.**
 
-- `prom_search_products` — search Prom.ua product pages through Brave Search or SearXNG.
-- `prom_search_url` — build a direct Prom.ua marketplace search URL without automated page access.
+### Buyer tools
 
-### Seller API — read
+- `prom_buyer_status`
+- `prom_buyer_open_login`
+- `prom_buyer_search`
+- `prom_buyer_product`
+- `prom_buyer_favorites`
+- `prom_buyer_favorite_add`
+- `prom_buyer_favorite_remove`
+- `prom_buyer_cart`
+- `prom_buyer_cart_add`
+- `prom_buyer_cart_remove`
+- `prom_buyer_cart_set_quantity`
+- `prom_buyer_orders`
+- `prom_buyer_find_all_from_one_seller`
+- `prom_saved_search_list`
+- `prom_saved_search_create`
+- `prom_saved_search_delete`
+- `prom_saved_search_run`
+
+### Search example
+
+A buyer search can request:
+
+```json
+{
+  "query": "DT-25-10",
+  "min_price": 20,
+  "max_price": 80,
+  "min_seller_rating": 95,
+  "available_only": true,
+  "prom_payment": true,
+  "sort": "price_asc",
+  "max_pages": 5,
+  "limit": 50
+}
+```
+
+Filters are applied to data visible in scanned Prom.ua result cards. Some cards may not expose every rating or payment field, so rating/payment filters intentionally exclude results where the requested field cannot be confirmed.
+
+### Buyer setup
+
+Install Chromium once:
+
+```bash
+npm run buyer:install-browser
+```
+
+Run the MCP with a visible browser for the first login:
+
+```bash
+PROM_BUYER_HEADLESS=false
+```
+
+Call `prom_buyer_open_login`, complete Prom.ua login manually in the opened Chromium window, then use `prom_buyer_status` to verify the persisted session.
+
+Default persistent data location:
+
+```text
+~/.promua-mcp/
+  browser-profile/
+  saved-searches.json
+```
+
+Override it with `PROM_BUYER_DATA_DIR`, `PROM_BUYER_PROFILE_DIR`, or `PROM_BUYER_SAVED_SEARCHES_FILE`.
+
+Favorites and cart **changes are disabled by default**:
+
+```bash
+PROM_BUYER_ALLOW_MUTATIONS=true
+```
+
+Read-only buyer tools do not need that flag.
+
+## Public marketplace search
+
+- `prom_search_products` — search Prom.ua product pages through Brave Search or SearXNG without using a logged-in browser.
+- `prom_search_url` — build a direct Prom.ua marketplace search URL.
+
+Configure one provider:
+
+```bash
+BRAVE_API_KEY=
+# or
+SEARXNG_URL=
+```
+
+## Seller API
+
+Prom.ua Public API is intended for a seller's own company data.
+
+### Read tools
 
 - `prom_seller_list_products`
 - `prom_seller_get_product`
@@ -38,9 +135,9 @@ For marketplace discovery, `promua-mcp` delegates search to a configured search 
 - `prom_seller_list_delivery_options`
 - `prom_seller_list_order_status_options`
 
-### Seller API — write
+### Write tools
 
-Write tools are **disabled by default** and refuse to mutate seller data until `PROM_ALLOW_WRITES=true` is explicitly configured.
+Seller writes are disabled until `PROM_ALLOW_WRITES=true`:
 
 - `prom_seller_edit_products`
 - `prom_seller_edit_products_by_external_id`
@@ -51,19 +148,21 @@ Write tools are **disabled by default** and refuse to mutate seller data until `
 ## Requirements
 
 - Node.js 20+
-- For seller tools: a Prom.ua API token
-- For marketplace search: Brave Search API key **or** a SearXNG instance
+- Chromium installed by `npm run buyer:install-browser` for buyer mode
+- Prom.ua API token only for seller tools
+- Brave Search API key or SearXNG only for public search-provider mode
 
 ## Install
 
 ```bash
 npm install
 npm run build
+npm run buyer:install-browser
 ```
 
 ## Configuration
 
-Copy `.env.example` or provide variables through your MCP client:
+Copy `.env.example` or configure the MCP client environment:
 
 ```bash
 PROM_API_TOKEN=
@@ -71,17 +170,18 @@ PROM_API_BASE_URL=https://my.prom.ua/api/v1
 PROM_ALLOW_WRITES=false
 
 BRAVE_API_KEY=
-# or
 SEARXNG_URL=
+
+PROM_BUYER_DATA_DIR=
+PROM_BUYER_HEADLESS=false
+PROM_BUYER_ALLOW_MUTATIONS=false
+PROM_BUYER_ACTION_TIMEOUT_MS=15000
+PROM_BUYER_PAGE_DELAY_MS=350
 
 PROM_HTTP_TIMEOUT_MS=15000
 ```
 
-Marketplace search needs one of `BRAVE_API_KEY` or `SEARXNG_URL`. `prom_search_url` needs no credentials.
-
 ## MCP client configuration
-
-After building from source:
 
 ```json
 {
@@ -90,24 +190,10 @@ After building from source:
       "command": "node",
       "args": ["/absolute/path/to/promua-mcp/dist/index.js"],
       "env": {
-        "PROM_API_TOKEN": "...",
-        "BRAVE_API_KEY": "..."
-      }
-    }
-  }
-}
-```
-
-Development mode:
-
-```json
-{
-  "mcpServers": {
-    "promua": {
-      "command": "npx",
-      "args": ["tsx", "/absolute/path/to/promua-mcp/src/index.ts"],
-      "env": {
-        "BRAVE_API_KEY": "..."
+        "PROM_BUYER_HEADLESS": "false",
+        "PROM_BUYER_ALLOW_MUTATIONS": "false",
+        "PROM_API_TOKEN": "optional",
+        "BRAVE_API_KEY": "optional"
       }
     }
   }
@@ -116,26 +202,32 @@ Development mode:
 
 ## Docker
 
+The image includes Chromium and defaults buyer mode to headless:
+
 ```bash
 docker build -t promua-mcp .
-docker run --rm -i --env-file .env promua-mcp
+docker run --rm -i \
+  -v promua-mcp-data:/home/pwuser/.promua-mcp \
+  --env-file .env \
+  promua-mcp
 ```
+
+For the first interactive buyer login, running locally with `PROM_BUYER_HEADLESS=false` is simpler. Afterwards the persisted profile can be reused headlessly.
 
 ## Safety model
 
-- API tokens are never logged by the server.
-- Write operations have a separate runtime gate: `PROM_ALLOW_WRITES=false` by default.
-- Prefer a Prom.ua token with the smallest permission set needed for your workflow.
-- Marketplace search results come from a search engine and can be stale. `price_uah_guess` is best-effort text parsing, not a guaranteed live price.
-- The server does not automatically purchase products or place marketplace orders.
+- Seller API writes: `PROM_ALLOW_WRITES=false` by default.
+- Buyer Favorites/cart mutations: `PROM_BUYER_ALLOW_MUTATIONS=false` by default.
+- Buyer checkout, order placement and payment are not implemented.
+- Login is manual; the MCP does not request or store your password/OTP itself.
+- Buyer session data stays in the configured local profile directory.
+- Search crawling is capped at 10 result pages per call and includes a configurable delay.
+- The browser adapter does not attempt to bypass CAPTCHAs or anti-bot controls.
+- Prom.ua UI changes can require selector updates; mutation tools fail closed if the expected control cannot be identified.
 
 ## Prom.ua Public API coverage
 
-The seller tools use the documented Prom.ua Public API v1 base URL:
-
-`https://my.prom.ua/api/v1`
-
-Implemented endpoints include:
+Seller tools currently cover:
 
 - `GET /products/list`
 - `GET /products/{id}`
